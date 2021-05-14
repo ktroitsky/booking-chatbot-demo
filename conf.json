@@ -1,0 +1,13 @@
+{
+  "settings": {
+    "autoLoad": true,
+    "autoSave": true,
+    "forceNER": true,
+    "nlp": {
+      "corpora": [
+        "./corpus.json"
+      ]
+    }
+  },
+  "use": ["Basic", "LangEn"]
+}
