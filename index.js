@@ -8,11 +8,13 @@ const prompt = promptSync();
 const manager = new NlpManager({ languages: ['en'], forceNER: true });
 const user = new User(manager);
 
-// Train and save the model.
+// Train and save the model. Then iterate the conversation until the user
+// enters "quit".
 (async() => {
   manager.addCorpus("corpus.json");
   await manager.train();
   manager.save();
+
   console.log("Hello! My name's Steve. How can I help you?");
   let userInput = prompt("> ");
   let response;

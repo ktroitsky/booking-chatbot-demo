@@ -2,6 +2,9 @@
 import promptSync from "prompt-sync";
 import Sugar from "sugar";
 
+// Extend the built-in Date to add a few methods from Sugar's library
+Sugar.Date.extend()
+
 // Imitate a system with a dynamic time slots for doctors
 const availableDoctors = { 
   "josh": "Josh Stammer, M.D.", 
@@ -18,12 +21,19 @@ class User {
    * Create an instance of User
    * @param {NlpManager} manager - instance of the main class in NLP.js library.
    * @param {function} postOutput - a function with one parameter (string), which will post the answer or log it
-   * @param {String} nextIntent - if not undefined, will overwrite the next message's intent. Is used to create logical flow in the conversation
+   * @param {String} nextIntent - if not undefined, will overwrite the next message's intent. 
+   * Is used to create logical flow in the conversation
+   * @param {Date} date - represents the date of the appointment (time - 00:00)
+   * @param {number} time - represents the offset in ms from the beginning of the day
+   * @param {Date} datetime - represents the date & the time of the appointment
    */
   constructor(manager, getInput = promptSync(), postOutput = console.log) {
     this.manager = manager;
     this.postOutput = postOutput;
     this.nextIntent;
+    this.date;
+    this.time;
+    this.datetime;
   }
 
   /**
@@ -55,13 +65,19 @@ class User {
               this.doctor = output.entities[i].option;
               break;
             case "date":
-              this.date = output.entities[i].sourceText;
+              let reservationDate = output.entities[i].sourceText;
+              reservationDate = this.constructor.processDate(reservationDate);
+              this.date = reservationDate;
               break;
             case "datetime":
-              this.datetime = output.entities[i].sourceText;
+              let reservationDatetime = output.entities[i].sourceText;
+              reservationDatetime = this.constructor.processDate(reservationDatetime);
+              this.datetime = reservationDatetime;
               break;
             case "time":
-              this.time = output.entities[i].sourceText;
+              let reservationTime = output.entities[i].sourceText;
+              reservationTime = this.constructor.processDate(reservationTime, true);
+              this.time = reservationTime;
               break;
           }
         }
@@ -70,17 +86,16 @@ class User {
       // All the required data to book is present => process the reservation
       if (this.doctor && (this.datetime || (this.date && this.time))) {
 
-        // If the user gave date & time separately, join them. If not, send the whole datetime
-        let textDate;
+        // If the user gave date & time separately, join them. If not, use the datetime
+        let finalDatetime;
         if (this.datetime) {
-          textDate = this.datetime;
+          finalDatetime = this.datetime;
         } else {
-          textDate = this.date + " " + this.time;
+          finalDatetime = this.date.advance(this.time);
         }
-        textDate = this.constructor.processDate(textDate);
 
-        // If the passed date or time are incorrect (e.g. are past)
-        if (textDate === undefined) {
+        // If the passed date or time are past
+        if (finalDatetime < Date.now()) {
 
           output.answer = "Sorry, you've provided an unavailable time or date. Please repeat again";
           this.date = this.time = this.datetime = undefined;
@@ -90,9 +105,10 @@ class User {
 
           // Imitate sending the booking info to an API
           console.log("## The request is sent to API");
-          output.answer = `Your reservation with ${availableDoctors[this.doctor]} was made. Time: ${textDate.toString()}. Thanks for working with us!`;
+          output.answer = `Your reservation with ${availableDoctors[this.doctor]} was made. `
+                          + `Time: ${finalDatetime.toString()}. Thanks for working with us!`;
 
-          // Rewriting the variables to give user the ability to book more than once
+          // Rewriting the variables to give the user the ability to book more than once
           this.doctor = undefined;
           this.date = this.datetime = this.time = undefined;
           
@@ -115,12 +131,16 @@ class User {
           output.answer = outputString;
           return output;
         }
+        // The user hasn't given the date or time. Ask them about it, while 
+        // staying on "user.book" intent.
         if (!(this.date)) {
           output.answer = "Please enter the date";
+          this.nextIntent = "user.book";
           return output;
         }
         if (!(this.time)) {
           output.answer = "Please enter the time";
+          this.nextIntent = "user.book";
           return output;
         }
       }
@@ -132,26 +152,32 @@ class User {
       // Imitate passing the chat to a human operator
       console.log("## Passing the chat over to a human manager");
 
-    } else if (output.intent === undefined) {
+    } else if (output.intent === "None") {
       output.answer = "Sorry, I didn't quite get you. Could your paraphrase it?"
     }
     return output;
   }
 
   /**
-   * Translate a string to a datetime formant
-   * @param {String} textDate - The string from which to extract the datetime
-   * @returns {Date} - a js Date representing the datetime of the appointment.
-   * Return undefined if the datetime is past
+   * Translate a natural language string to a Date format
+   * @param {String} textDate - the string from which to extract the datetime
+   * @param {Boolean} isTime - if set to true, process the string as a time, 
+   * in which case only the time offset in miliseconds from the beginning of 
+   * the day will be returned.
+   * @returns {Date} - js Date or number. If isTime, returns offset in miliseconds.
+   * If not isTime, returns a Date
    */
-  static processDate(textDate) {
-    let date = Sugar.Date.create(textDate);
-    let now = new Date();
-    if (now > date) {
-      return undefined
-    } else {
-      return date;
+  static processDate(textDate, isTime = false) {
+    let date = Date.create(textDate);
+
+    if (isTime) {
+      let dayStartTime = date.clone();
+
+      // Is modified in-place
+      dayStartTime.beginningOfDay();
+      return date - dayStartTime;
     }
+    return date;
   }
 }
 
