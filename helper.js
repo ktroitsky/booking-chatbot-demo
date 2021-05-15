@@ -1,5 +1,4 @@
 "use strict"
-import promptSync from "prompt-sync";
 import Sugar from "sugar";
 
 // Extend the built-in Date to add a few methods from Sugar's library
@@ -20,20 +19,32 @@ class User {
   /**
    * Create an instance of User
    * @param {NlpManager} manager - instance of the main class in NLP.js library.
-   * @param {function} postOutput - a function with one parameter (string), which will post the answer or log it
+   * @param {String} postOutput - a string that lets you choose how an instance
+   * will be able to send responses to user. Options:
+   * - "console" (Default) - console.log(response)
+   * - "tg" - send the data to telegram. In this case, you have to specify the 
+   * property "chatid". Otherwise, "console" will be set.
    * @param {String} nextIntent - if not undefined, will overwrite the next message's intent. 
    * Is used to create logical flow in the conversation
    * @param {Date} date - represents the date of the appointment (time - 00:00)
    * @param {number} time - represents the offset in ms from the beginning of the day
    * @param {Date} datetime - represents the date & the time of the appointment
+   * @param {Date} chatid - Telegram chat ID of the user
    */
-  constructor(manager, getInput = promptSync(), postOutput = console.log) {
+  constructor(manager, postOutput = console.log, chatid = undefined) {
     this.manager = manager;
-    this.postOutput = postOutput;
     this.nextIntent;
     this.date;
     this.time;
     this.datetime;
+    this.chatid = chatid;
+    if (postOutput === "tg") {
+      this.postOutput = async function(text) {
+        await this.constructor.bot.sendMessage(this.chatid, text);
+      }
+    } else {
+      this.postOutput = console.log;
+    } 
   }
 
   /**
@@ -104,7 +115,7 @@ class User {
         } else {
 
           // Imitate sending the booking info to an API
-          console.log("## The request is sent to API");
+          this.postOutput("## The request is sent to API");
           output.answer = `Your reservation with ${availableDoctors[this.doctor]} was made. `
                           + `Time: ${finalDatetime.toString()}. Thanks for working with us!`;
 
@@ -150,7 +161,7 @@ class User {
       output.answer = "Redirecting to a human manager";
 
       // Imitate passing the chat to a human operator
-      console.log("## Passing the chat over to a human manager");
+      this.postOutput("## Passing the chat over to a human manager");
 
     } else if (output.intent === "None") {
       output.answer = "Sorry, I didn't quite get you. Could your paraphrase it?"
