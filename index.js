@@ -1,6 +1,6 @@
 "use strict"
 import { NlpManager } from "node-nlp";
-import { User } from "./helper.js";
+import { User } from "./user.js";
 import TeleBot from "telebot";
 import dotenv from "dotenv";
 dotenv.config()
